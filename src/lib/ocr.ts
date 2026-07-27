@@ -1,8 +1,6 @@
 import { createWorker } from "tesseract.js";
+import { MAX_IMAGE_SIZE_BYTES, MAX_IMAGE_SIZE_MB } from "./ocrConfig";
 import { normalizeOcrText } from "./textClean";
-
-export const MAX_IMAGE_SIZE_MB = 8;
-export const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
 
 const SUPPORTED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
 

@@ -10,7 +10,6 @@ import { AnalysisResultPanel } from "./components/AnalysisResult";
 import { HistoryPanel } from "./components/HistoryPanel";
 import { analyzeChat, type AnalyzeMode } from "./lib/analyzeChat";
 import { addHistoryItem, clearHistory, deleteHistoryItem, loadHistory, type AnalysisHistoryItem } from "./lib/history";
-import { recognizeImageText } from "./lib/ocr";
 import type { AnalysisInputMode, AnalysisResult, ChatScenario } from "./types/analysis";
 
 type OcrStatusKind = "idle" | "loading" | "success" | "error";
@@ -103,6 +102,7 @@ export default function App() {
     setOcrStatusMessage("正在识别截图文字...");
 
     try {
+      const { recognizeImageText } = await import("./lib/ocr");
       const text = await recognizeImageText(file, (progress) => {
         if (ocrRequestId.current !== requestId) return;
         const percent = progress.progress > 0 ? ` ${progress.progress}%` : "";

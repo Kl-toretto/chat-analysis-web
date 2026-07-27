@@ -1,5 +1,5 @@
 import { AlertCircle, CheckCircle2, ImagePlus, Loader2, Upload } from "lucide-react";
-import { MAX_IMAGE_SIZE_MB } from "../lib/ocr";
+import { MAX_IMAGE_SIZE_MB } from "../lib/ocrConfig";
 
 type OcrStatusKind = "idle" | "loading" | "success" | "error";
 
