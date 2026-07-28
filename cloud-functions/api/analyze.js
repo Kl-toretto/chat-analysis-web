@@ -1,5 +1,7 @@
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 const DEFAULT_MODEL = "gpt-4o-mini";
+const DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com";
+const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 const SCENARIOS = ["auto", "romantic", "friend", "leader", "colleague", "client", "teacher", "family"];
 const CONFIDENCE = ["低", "中", "高"];
 const URGENCY = ["低", "中", "高", "不明确"];
@@ -15,7 +17,7 @@ const scenarioLabels = {
   family: "家人沟通",
 };
 
-export async function onRequest({ request, env }) {
+export default async function onRequest({ request, env }) {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders(env) });
   }
@@ -39,13 +41,14 @@ export async function onRequest({ request, env }) {
     return json({ error: "CHAT_TEXT_REQUIRED" }, 400, env);
   }
 
-  const apiKey = env?.OPENAI_API_KEY || process.env.OPENAI_API_KEY || "";
+  const deepSeekApiKey = env?.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY || "";
+  const apiKey = deepSeekApiKey || env?.OPENAI_API_KEY || process.env.OPENAI_API_KEY || "";
   if (!apiKey) {
     return json(createMockResult(chatText, scenario, mode), 200, env);
   }
 
   try {
-    const analysis = await analyzeWithOpenAi(chatText, scenario, mode, apiKey, env);
+    const analysis = await analyzeWithProvider(chatText, scenario, mode, apiKey, deepSeekApiKey, env);
     return json(analysis, 200, env);
   } catch (error) {
     console.error("analyze failed, fallback to mock", error);
@@ -53,38 +56,61 @@ export async function onRequest({ request, env }) {
   }
 }
 
-async function analyzeWithOpenAi(chatText, scenario, mode, apiKey, env) {
-  const baseUrl = (env?.OPENAI_BASE_URL || process.env.OPENAI_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
-  const model = env?.OPENAI_MODEL || process.env.OPENAI_MODEL || DEFAULT_MODEL;
+async function analyzeWithProvider(chatText, scenario, mode, apiKey, deepSeekApiKey, env) {
+  const configuredBaseUrl = env?.OPENAI_BASE_URL || process.env.OPENAI_BASE_URL;
+  const baseUrl = (configuredBaseUrl || (deepSeekApiKey ? DEFAULT_DEEPSEEK_BASE_URL : DEFAULT_BASE_URL)).replace(/\/+$/, "");
+  const isDeepSeek = baseUrl.includes("api.deepseek.com");
+  const model =
+    env?.OPENAI_MODEL ||
+    process.env.OPENAI_MODEL ||
+    (isDeepSeek ? DEFAULT_DEEPSEEK_MODEL : DEFAULT_MODEL);
   const prompt = buildAnalyzePrompt(chatText, scenario, mode);
 
-  const response = await fetch(`${baseUrl}/responses`, {
+  const response = await fetch(`${baseUrl}${isDeepSeek ? "/chat/completions" : "/responses"}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({
-      model,
-      input: prompt,
-      text: {
-        format: {
-          type: "json_schema",
-          name: "analysis_result",
-          strict: true,
-          schema: analysisJsonSchema,
-        },
-      },
-    }),
+    body: JSON.stringify(
+      isDeepSeek
+        ? {
+            model,
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" },
+            max_tokens: 2000,
+            stream: false,
+          }
+        : {
+            model,
+            input: prompt,
+            text: {
+              format: {
+                type: "json_schema",
+                name: "analysis_result",
+                strict: true,
+                schema: analysisJsonSchema,
+              },
+            },
+          },
+    ),
   });
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(`OPENAI_REQUEST_FAILED_${response.status}`);
+    throw new Error(`AI_REQUEST_FAILED_${response.status}`);
   }
 
-  const outputText = extractOutputText(data);
+  const outputText = isDeepSeek ? extractChatCompletionText(data) : extractOutputText(data);
   return normalizeAnalysisResult(JSON.parse(outputText), chatText, scenario, mode);
+}
+
+function extractChatCompletionText(data) {
+  const text = data?.choices?.[0]?.message?.content;
+  if (typeof text !== "string" || !text.trim()) {
+    throw new Error("AI response text is empty.");
+  }
+  return text.trim();
 }
 
 function extractOutputText(data) {
