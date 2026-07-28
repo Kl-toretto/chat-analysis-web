@@ -106,7 +106,7 @@ export default function App() {
       const text = await recognizeImageText(file, (progress) => {
         if (ocrRequestId.current !== requestId) return;
         const percent = progress.progress > 0 ? ` ${progress.progress}%` : "";
-        setOcrStatusMessage(`正在识别截图文字...${percent}`);
+        setOcrStatusMessage(`${progress.status}${percent}`);
       });
 
       if (ocrRequestId.current !== requestId) return;
